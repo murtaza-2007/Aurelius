@@ -1231,6 +1231,8 @@ const HEALTH_POLL_MS = 350;
 
 async function initLoadingSequence() {
   const loadingScreen = document.getElementById('loading-screen');
+  const loadingHint = document.getElementById('loading-hint');
+  const hintTimer = setTimeout(() => loadingHint.classList.add('show'), 10000);
 
   while (true) {
     try {
@@ -1242,6 +1244,7 @@ async function initLoadingSequence() {
     await new Promise(r => setTimeout(r, HEALTH_POLL_MS));
   }
 
+  clearTimeout(hintTimer);
   loadingScreen.classList.add('fade-out');
   setTimeout(() => loadingScreen.classList.add('hidden'), 550);
 
