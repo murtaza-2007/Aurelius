@@ -133,6 +133,19 @@ body::before {
   animation: loading-spin 0.85s linear infinite;
 }
 
+#loading-hint {
+  margin-top: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+#loading-hint.show {
+  opacity: 0.55;
+}
+
 @keyframes loading-spin {
   to {
     transform: rotate(360deg);
