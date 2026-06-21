@@ -1,0 +1,556 @@
+Albert Einstein
+Isaac Newton
+Charles Darwin
+Marie Curie
+Nikola Tesla
+Leonardo da Vinci
+William Shakespeare
+Wolfgang Amadeus Mozart
+Ludwig van Beethoven
+Vincent van Gogh
+Pablo Picasso
+Sigmund Freud
+Karl Marx
+Adolf Hitler
+Winston Churchill
+Abraham Lincoln
+George Washington
+Napoleon
+Julius Caesar
+Cleopatra
+Alexander the Great
+Genghis Khan
+Mahatma Gandhi
+Nelson Mandela
+Martin Luther King Jr.
+Barack Obama
+Donald Trump
+Elon Musk
+Bill Gates
+Steve Jobs
+Mark Zuckerberg
+Jeff Bezos
+Warren Buffett
+Stephen Hawking
+Carl Sagan
+Richard Feynman
+Alan Turing
+John von Neumann
+Ada Lovelace
+Tim Berners-Lee
+Linus Torvalds
+World War I
+World War II
+Cold War
+French Revolution
+American Revolution
+Russian Revolution
+Industrial Revolution
+Renaissance
+Roman Empire
+Byzantine Empire
+Ottoman Empire
+British Empire
+Ancient Egypt
+Ancient Greece
+Ancient Rome
+Holocaust
+September 11 attacks
+Cuban Missile Crisis
+Vietnam War
+Korean War
+Apollo 11
+Moon landing
+Big Bang
+Solar System
+Earth
+Sun
+Moon
+Mars
+Jupiter
+Saturn
+Black hole
+Galaxy
+Universe
+Quantum mechanics
+Theory of relativity
+Evolution
+DNA
+Human genome
+Photosynthesis
+Gravity
+Electricity
+Magnetism
+Periodic table
+Chemical element
+Atom
+Molecule
+Climate change
+Global warming
+Renewable energy
+Solar power
+Nuclear power
+Artificial intelligence
+Machine learning
+Deep learning
+Neural network
+Internet
+World Wide Web
+Computer
+Smartphone
+Programming language
+Python (programming language)
+JavaScript
+Java (programming language)
+C++
+Linux
+Microsoft Windows
+Android (operating system)
+iOS
+Google
+Apple Inc.
+Microsoft
+Amazon (company)
+Facebook
+Meta Platforms
+Twitter
+Tesla, Inc.
+SpaceX
+OpenAI
+Wikipedia
+YouTube
+Netflix
+Spotify
+United States
+United Kingdom
+France
+Germany
+Italy
+Spain
+Russia
+China
+Japan
+India
+Pakistan
+Bangladesh
+Brazil
+Mexico
+Canada
+Australia
+South Africa
+Egypt
+Nigeria
+Saudi Arabia
+Israel
+Iran
+Iraq
+Turkey
+Greece
+Poland
+Ukraine
+Sweden
+Norway
+Finland
+Switzerland
+Netherlands
+Belgium
+Portugal
+South Korea
+North Korea
+Vietnam
+Thailand
+Indonesia
+Philippines
+Malaysia
+Singapore
+New Zealand
+Argentina
+Chile
+Colombia
+Peru
+Venezuela
+Cuba
+New York City
+Los Angeles
+London
+Paris
+Tokyo
+Beijing
+Mumbai
+Delhi
+Moscow
+Berlin
+Rome
+Madrid
+Sydney
+Toronto
+Dubai
+Singapore (city)
+Hong Kong
+Shanghai
+Cairo
+Istanbul
+Bangkok
+Seoul
+Mohali
+Chandigarh
+Punjab, India
+Maharashtra
+Bangalore
+Chennai
+Kolkata
+Hyderabad
+Pune
+Ahmedabad
+Jaipur
+Lucknow
+Nagpur
+Football
+Basketball
+Cricket
+Tennis
+Baseball
+Olympic Games
+FIFA World Cup
+Cricket World Cup
+National Basketball Association
+Premier League
+UEFA Champions League
+Lionel Messi
+Cristiano Ronaldo
+Michael Jordan
+LeBron James
+Usain Bolt
+Serena Williams
+Roger Federer
+Muhammad Ali
+Pelé
+Diego Maradona
+Music
+Rock music
+Pop music
+Hip hop music
+Jazz
+Classical music
+The Beatles
+Elvis Presley
+Michael Jackson
+Bob Dylan
+Taylor Swift
+Beyoncé
+Film
+Hollywood
+Bollywood
+Academy Awards
+Star Wars
+The Lord of the Rings (film series)
+Harry Potter
+Marvel Cinematic Universe
+Television
+Streaming media
+Video game
+Minecraft
+Fortnite (video game)
+Chess
+Literature
+Novel
+Poetry
+The Bible
+Quran
+Religion
+Christianity
+Islam
+Hinduism
+Buddhism
+Judaism
+Sikhism
+Atheism
+Philosophy
+Plato
+Aristotle
+Socrates
+Immanuel Kant
+Friedrich Nietzsche
+Confucius
+Logic
+Ethics
+Mathematics
+Algebra
+Geometry
+Calculus
+Statistics
+Probability
+Number theory
+Physics
+Chemistry
+Biology
+Astronomy
+Geology
+Psychology
+Sociology
+Economics
+Capitalism
+Socialism
+Communism
+Democracy
+Government
+United Nations
+World Health Organization
+NASA
+European Union
+NATO
+World Bank
+International Monetary Fund
+Stock market
+Cryptocurrency
+Bitcoin
+Ethereum
+Inflation
+Recession
+Great Depression
+2008 financial crisis
+COVID-19 pandemic
+Vaccine
+Antibiotic
+Cancer
+Heart disease
+Diabetes
+Mental health
+Depression (mood)
+Anxiety
+Nutrition
+Exercise
+Sleep
+Human body
+Brain
+Heart
+Immune system
+Bacteria
+Virus
+Medicine
+Surgery
+Hospital
+Doctor of Medicine
+Nursing
+Pharmacy
+Veterinary medicine
+Agriculture
+Food
+Water
+Air pollution
+Plastic pollution
+Deforestation
+Biodiversity
+Endangered species
+Tiger
+Lion
+Elephant
+Whale
+Shark
+Dolphin
+Dog
+Cat
+Horse
+Bird
+Dinosaur
+Fossil
+Evolutionary biology
+Natural selection
+Ecosystem
+Rainforest
+Desert
+Ocean
+Mountain
+River
+Volcano
+Earthquake
+Tsunami
+Hurricane
+Tornado
+Weather
+Climate
+Season
+Time zone
+Calendar
+History of the world
+Prehistory
+Stone Age
+Bronze Age
+Iron Age
+Middle Ages
+Crusades
+Black Death
+Silk Road
+Colonialism
+Slavery
+Civil rights movement
+Feminism
+LGBT rights
+Human rights
+United States Constitution
+Declaration of Independence
+Magna Carta
+Law
+Crime
+Police
+Prison
+Supreme Court of the United States
+United States Congress
+President of the United States
+Prime Minister
+Monarchy
+Dictatorship
+Election
+Voting
+Political party
+Nationalism
+Globalization
+Trade
+Tariff
+Currency
+United States dollar
+Euro
+Gold
+Oil
+Coal
+Natural gas
+Electric vehicle
+Automobile
+Aircraft
+Airplane
+Boeing
+Airbus
+Ship
+Train
+Bicycle
+Bridge
+Skyscraper
+Architecture
+Eiffel Tower
+Statue of Liberty
+Great Wall of China
+Taj Mahal
+Pyramids of Giza
+Colosseum
+Stonehenge
+Machu Picchu
+Petra
+Angkor Wat
+Mount Everest
+Amazon rainforest
+Sahara
+Antarctica
+Arctic
+Pacific Ocean
+Atlantic Ocean
+Mediterranean Sea
+Nile
+Amazon River
+Yangtze
+Himalayas
+Andes
+Alps
+Grand Canyon
+Niagara Falls
+Yellowstone National Park
+Education
+University
+Harvard University
+Stanford University
+Massachusetts Institute of Technology
+Oxford University
+Cambridge University
+Library
+School
+Language
+English language
+Spanish language
+Mandarin Chinese
+Arabic
+Hindi
+French language
+German language
+Translation
+Linguistics
+Alphabet
+Writing system
+Printing press
+Photography
+Telephone
+Radio
+Television (technology)
+Satellite
+GPS
+Robot
+Automation
+3D printing
+Biotechnology
+Genetic engineering
+CRISPR
+Stem cell
+Cloning
+Space exploration
+International Space Station
+Hubble Space Telescope
+Mars rover
+Asteroid
+Comet
+Meteor
+Exoplanet
+Astrobiology
+String theory
+Dark matter
+Dark energy
+Higgs boson
+Large Hadron Collider
+Periodic table of elements
+Hydrogen
+Oxygen
+Carbon
+Gold (element)
+Iron
+Uranium
+Plutonium
+Nuclear weapon
+World population
+Urbanization
+Migration
+Refugee
+Poverty
+Famine
+War
+Terrorism
+Genocide
+Nuclear weapons testing
+Space Race
+Berlin Wall
+Iron Curtain
+Apartheid
+Tiananmen Square protests
+Arab Spring
+Brexit
+European migrant crisis
+Russian invasion of Ukraine
+Israeli–Palestinian conflict
+Climate justice
+Sustainable development
+United Nations Sustainable Development Goals
+Renewable resource
+Fossil fuel
+Carbon footprint
+Recycling
+Plastic
+Pandemic
+Epidemiology
+Public health
+Mental illness
+Autism
+ADHD
+Alzheimer's disease
+Parkinson's disease
+HIV/AIDS
+Tuberculosis
+Malaria
+Smallpox
+Influenza
+Spanish flu

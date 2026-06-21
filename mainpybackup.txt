@@ -1,0 +1,799 @@
+"""
+Aurelius — Wikipedia Rabbit-Hole Navigator Backend
+Architecture: embeddings + graph search only. No LLM, no external services.
+
+Per-expansion pipeline:
+  1. Fetch ALL links from article (paginated, up to MAX_FETCH)
+  2. Batch-embed ALL uncached links in one in-process sentence-transformers call
+  3. Score each candidate: cosine-to-target + frontier bonus + category bonus
+  4. Prune to top PRUNE_TOP_K, dropping anything below the raw-cosine floor
+  5. Push survivors to heap (greedy best-first: heap key = h only)
+
+The only external dependency at runtime is the Wikipedia API itself. The
+embedding model (sentence-transformers, all-MiniLM-L6-v2) is loaded once,
+in-process, at startup — no network calls, no LLM, no failure mode where
+the search degrades silently.
+"""
+
+import asyncio
+import heapq
+import json
+import math
+import random
+import re
+import sys
+import time
+from collections import defaultdict
+from pathlib import Path
+from typing import Optional
+from urllib.parse import unquote
+
+import httpx
+import numpy as np
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from sentence_transformers import SentenceTransformer
+
+# Windows redirects stdout to cp1252 when it's not an interactive console
+# (e.g. piped to a log file), which raises on the arrow/emoji characters
+# used in log lines below and would otherwise crash mid-search.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ── Embedding model: loaded once at startup, in-process ─────────────────────
+EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
+_EMBED_MODEL: Optional[SentenceTransformer] = None
+
+@app.on_event("startup")
+async def _startup_embed_model():
+    global _EMBED_MODEL
+    print(f"[Embed] Loading sentence-transformers model '{EMBED_MODEL_NAME}'...")
+    _EMBED_MODEL = SentenceTransformer(EMBED_MODEL_NAME)
+    print(f"[Embed] Ready (dim={_EMBED_MODEL.get_embedding_dimension()})")
+
+WIKI_API = "https://en.wikipedia.org/w/api.php"
+
+MAX_FETCH          = 500   # max links fetched from Wikipedia (paginated)
+MAX_PAGES          = 6     # safety cap on pagination pages when hunting for a specific goal link
+MAX_HOPS           = 60    # search iteration limit
+TOP_DISPLAY        = 25    # max neighbours sent to frontend per step
+FRONTIER_DEPTH_2_K = 16    # how many depth-1 target neighbours to expand for depth-2 frontier
+
+EMBED_BATCH_SIZE   = 128   # in-process model batch size (no HTTP token limits to worry about)
+
+PRUNE_TOP_K        = 15    # keep this many candidates per expansion after scoring
+PRUNE_FLOOR        = 0.15  # hard floor on raw cosine-to-target; frontier members exempt
+
+FRONTIER_D1_BONUS  = 0.30  # candidate is a direct link of the target
+FRONTIER_D2_BONUS  = 0.10  # candidate is 2 hops from the target
+CAT_BONUS_WEIGHT   = 0.10  # max bonus for category-embedding alignment
+
+_THIS_DIR = Path(__file__).resolve().parent
+SEED_FILE = _THIS_DIR / "common_wiki_searches.txt"
+
+WIKI_HEADERS = {
+    "User-Agent": "Aurelius-WikiNavigator/6.0 (educational; contact@example.com)",
+    "Accept": "application/json",
+}
+
+def make_wiki_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(headers=WIKI_HEADERS, follow_redirects=True,
+                             timeout=httpx.Timeout(25.0))
+
+
+# ══════════════════════════════════════════════════════════════
+# SEARCH STATS
+# ══════════════════════════════════════════════════════════════
+
+class SearchStats:
+    def __init__(self):
+        self.t0            = time.time()
+        self.nodes_visited = 0
+        self.nodes_pruned  = 0
+        self.embed_calls   = 0
+
+    def elapsed(self) -> float:
+        return round(time.time() - self.t0, 1)
+
+    def to_dict(self) -> dict:
+        return {
+            "nodes_visited": self.nodes_visited,
+            "nodes_pruned":  self.nodes_pruned,
+            "embed_calls":   self.embed_calls,
+            "elapsed_s":     self.elapsed(),
+        }
+
+
+# ══════════════════════════════════════════════════════════════
+# SESSION CACHES  (reset each search)
+# ══════════════════════════════════════════════════════════════
+
+_emb_cache: dict[str, np.ndarray] = {}   # title → embedding vector
+_dead_ends: set[str]              = set() # articles with 0 links
+
+def reset_session_caches():
+    global _emb_cache, _dead_ends
+    _emb_cache = {}
+    _dead_ends = set()
+
+
+# ══════════════════════════════════════════════════════════════
+# VECTOR MATH
+# ══════════════════════════════════════════════════════════════
+
+def cosine_similarity(a, b) -> float:
+    if a is None or b is None:
+        return 0.0
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    if a.size == 0 or b.size == 0:
+        return 0.0
+    na = np.linalg.norm(a)
+    nb = np.linalg.norm(b)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+# ══════════════════════════════════════════════════════════════
+# EMBEDDING  (in-process sentence-transformers, no network calls)
+# ══════════════════════════════════════════════════════════════
+
+async def batch_embed(texts: list[str], stats: SearchStats) -> list[np.ndarray]:
+    """
+    Embed texts via the in-process sentence-transformers model.
+    Results are cached per title across the session. Runs the (CPU-bound,
+    synchronous) encode call in a thread executor so it never blocks the
+    event loop — keeps pause/resume and other WS traffic responsive.
+    """
+    if not texts or _EMBED_MODEL is None:
+        return [np.array([]) for _ in texts]
+
+    uncached_idx  = [i for i, t in enumerate(texts) if t not in _emb_cache]
+    uncached_text = [texts[i] for i in uncached_idx]
+    if uncached_text:
+        loop = asyncio.get_event_loop()
+        embs = await loop.run_in_executor(
+            None,
+            lambda: _EMBED_MODEL.encode(
+                uncached_text, convert_to_numpy=True,
+                batch_size=EMBED_BATCH_SIZE, show_progress_bar=False,
+            ),
+        )
+        stats.embed_calls += 1
+        for orig_i, emb in zip(uncached_idx, embs):
+            _emb_cache[texts[orig_i]] = emb
+
+    return [_emb_cache.get(t, np.array([])) for t in texts]
+
+
+async def wiki_get(client: httpx.AsyncClient, params: dict, retries: int = 3) -> dict:
+    for attempt in range(retries + 1):
+        try:
+            r = await client.get(WIKI_API, params=params)
+            if r.status_code == 429:
+                await asyncio.sleep(min(2 ** attempt, 8)); continue
+            if r.status_code != 200:
+                return {}
+            return r.json()
+        except httpx.TimeoutException:
+            if attempt < retries: await asyncio.sleep(1)
+        except Exception as e:
+            print(f"[wiki] {e}"); return {}
+    return {}
+
+def extract_title_from_url(query: str) -> Optional[str]:
+    """If query is a Wikipedia URL, extract and decode the article title; else None."""
+    m = re.search(r'wikipedia\.org/wiki/([^#?\s]+)', query.strip())
+    if not m:
+        return None
+    return unquote(m.group(1)).replace('_', ' ').strip()
+
+async def resolve_article_title(client: httpx.AsyncClient, query: str) -> Optional[str]:
+    query = query.strip()
+    url_t = extract_title_from_url(query)
+    if url_t: query = url_t
+
+    data = await wiki_get(client, {"action":"query","titles":query,
+                                   "redirects":1,"format":"json","utf8":1})
+    for pid, page in data.get("query",{}).get("pages",{}).items():
+        if pid != "-1":
+            print(f"[resolve] Exact ✓ '{page['title']}'")
+            return page["title"]
+
+    data = await wiki_get(client, {"action":"opensearch","search":query,
+                                   "limit":10,"namespace":0,"format":"json","utf8":1})
+    titles = data[1] if isinstance(data, list) and len(data) > 1 else []
+    if titles:
+        for t in titles:
+            if t.lower() == query.lower(): return t
+        return titles[0]
+
+    data = await wiki_get(client, {"action":"query","list":"search","srsearch":query,
+                                   "srlimit":5,"srprop":"title","format":"json","utf8":1})
+    results = data.get("query",{}).get("search",[])
+    if results:
+        return results[0]["title"]
+    return None
+
+_DATE_RE = re.compile(
+    r'^\d{1,2} \w+$|^\w+ \d{1,2}$|^\d{4}$|^\d{4} in '
+    r'|^\d{1,2}\w* century'
+    r'|^(January|February|March|April|May|June|July|August|'
+    r'September|October|November|December)$'
+    r'|^\d{4}[-–]\d{2,4}$', re.IGNORECASE
+)
+def _is_date(t: str) -> bool:
+    return bool(_DATE_RE.search(t))
+
+_JUNK_TITLES = frozenset({
+    "Wayback Machine", "OCLC", "Digital object identifier", "CrossRef",
+    "JSTOR", "PubMed", "PubMed Central", "Semantic Scholar", "ArXiv",
+    "Bibcode", "CiteSeerX", "S2CID", "Zbl", "MR", "PMC",
+})
+def _is_junk(t: str) -> bool:
+    """Bibliographic citation artifacts: dead ends with 1-3 links each."""
+    return t.endswith("(identifier)") or t in _JUNK_TITLES
+
+async def get_all_links(client: httpx.AsyncClient, title: str,
+                        end_title: str = "",
+                        target_neighbours: set | None = None) -> list[str]:
+    """
+    Fetch ALL links via pagination (up to MAX_FETCH).
+    Goal link is always included first if found.
+    Target neighbours always get priority slots.
+    Date/year stubs filtered unless list would be empty.
+
+    BUGFIX: when hunting for end_title, the old exit condition
+    (len(all_links) >= MAX_FETCH) stopped pagination after roughly the
+    first alphabetical page of a large article, so a goal link sorting
+    late in the alphabet (e.g. "Pakistan" on India's 1000+-link page)
+    was never found even though it's a direct 1-hop link. We now keep
+    paginating past MAX_FETCH while specifically searching for a goal,
+    bounded by MAX_PAGES as a safety cap. Calls with no end_title (e.g.
+    pre-seeding target neighbours) are unaffected — same stop condition
+    as before.
+    """
+    all_links:  list[str] = []
+    date_links: list[str] = []
+    goal_link:  str | None = None
+    end_lower = end_title.lower() if end_title else ""
+    params = {
+        "action": "query", "titles": title, "prop": "links",
+        "pllimit": 500, "plnamespace": 0, "format": "json", "utf8": 1,
+    }
+    pages_fetched = 0
+    while True:
+        data = await wiki_get(client, params)
+        pages_fetched += 1
+        for page in data.get("query", {}).get("pages", {}).values():
+            for link in page.get("links", []):
+                t = link["title"]
+                if end_lower and t.lower() == end_lower:
+                    goal_link = t; continue
+                if _is_junk(t):
+                    continue
+                if _is_date(t):
+                    date_links.append(t)
+                else:
+                    all_links.append(t)
+        cont = data.get("continue", {})
+        if "plcontinue" not in cont:
+            break
+        if goal_link:
+            break   # found it — no need to keep paginating
+        if end_lower:
+            # Actively hunting a specific goal: keep going past MAX_FETCH,
+            # bounded only by MAX_PAGES (safety cap on API calls).
+            if pages_fetched >= MAX_PAGES:
+                break
+        else:
+            # No specific goal (e.g. pre-seeding neighbours): original behavior.
+            if len(all_links) + len(date_links) >= MAX_FETCH:
+                break
+        params["plcontinue"] = cont["plcontinue"]
+
+    result: list[str] = []
+    if goal_link:
+        result.append(goal_link)
+
+    tn = target_neighbours or set()
+    bridges = [l for l in all_links if l in tn]
+    rest    = [l for l in all_links if l not in tn]
+    result += bridges
+    result += rest
+    if len(result) < 5:
+        result += date_links[:max(0, 5 - len(result))]
+
+    return result[:MAX_FETCH]
+
+async def get_backlinks(client: httpx.AsyncClient, title: str,
+                        limit: int = MAX_FETCH) -> list[str]:
+    """
+    Fetch articles that link TO `title` (Wikipedia prop=linkshere) — the
+    correct direction for a forward-search bridge set.
+
+    get_all_links() returns what `title` points to. That is NOT useful as
+    a "one hop from target" bridge set, because Wikipedia links are not
+    reciprocal: target -> A does not imply A -> target. A backlink (B ->
+    target) is a guaranteed bridge — if the forward search ever reaches B,
+    expanding it is certain to find `target` in B's own outbound links.
+    Using outbound links here was sending the search on real-but-useless
+    detours (e.g. the "Star Wars" article links to "Star Destroyer", which
+    in turn links to real-world "Capital ship"/"Destroyer" articles for
+    etymology — those score high on the old outbound-based frontier but
+    don't link back to anything Star Wars-related themselves).
+    """
+    all_links:  list[str] = []
+    date_links: list[str] = []
+    params = {
+        "action": "query", "titles": title, "prop": "linkshere",
+        "lhlimit": 500, "lhnamespace": 0, "format": "json", "utf8": 1,
+    }
+    pages_fetched = 0
+    while True:
+        data = await wiki_get(client, params)
+        pages_fetched += 1
+        for page in data.get("query", {}).get("pages", {}).values():
+            for link in page.get("linkshere", []):
+                t = link["title"]
+                if _is_junk(t):
+                    continue
+                if _is_date(t):
+                    date_links.append(t)
+                else:
+                    all_links.append(t)
+        cont = data.get("continue", {})
+        if "lhcontinue" not in cont:
+            break
+        if len(all_links) + len(date_links) >= limit or pages_fetched >= MAX_PAGES:
+            break
+        params["lhcontinue"] = cont["lhcontinue"]
+    return (all_links + date_links)[:limit]
+
+async def get_article_summary(client: httpx.AsyncClient, title: str) -> str:
+    data = await wiki_get(client, {"action":"query","titles":title,"prop":"extracts",
+                                   "exintro":True,"explaintext":True,
+                                   "exsentences":2,"format":"json","utf8":1})
+    for page in data.get("query",{}).get("pages",{}).values():
+        return page.get("extract","")[:220]
+    return ""
+
+async def get_target_categories(client: httpx.AsyncClient, title: str) -> list[str]:
+    """Fetch human-readable categories for the target article."""
+    data = await wiki_get(client, {
+        "action": "query", "titles": title, "prop": "categories",
+        "cllimit": 20, "clshow": "!hidden", "format": "json", "utf8": 1,
+    })
+    cats = []
+    for page in data.get("query", {}).get("pages", {}).values():
+        for c in page.get("categories", []):
+            # Strip "Category:" prefix
+            name = re.sub(r"^Category:", "", c["title"]).strip()
+            cats.append(name)
+    return cats
+
+
+def _load_seed_titles() -> list[str]:
+    """Read the curated topic list used by the Random button, one title per line."""
+    if not SEED_FILE.exists():
+        return []
+    with open(SEED_FILE, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
+
+
+# ══════════════════════════════════════════════════════════════
+# SEARCH ENGINE — greedy best-first, embeddings + graph only
+# ══════════════════════════════════════════════════════════════
+
+class AStarNavigator:
+    def __init__(self, start: str, end: str, ws: WebSocket):
+        self.start   = start
+        self.end     = end
+        self.ws      = ws
+        self.stats   = SearchStats()
+        self._paused = False
+
+        self.g_score:   dict[str, float]         = defaultdict(lambda: math.inf)
+        self.came_from: dict[str, Optional[str]] = {}
+        self.h_cache:   dict[str, float]         = {}
+        self.open_heap: list[tuple]              = []
+        self.open_set:  set[str]                = set()
+        self.closed_set:set[str]                = set()
+
+        self.cats_target:        list[str]        = []
+        self.cat_embeddings:     list[np.ndarray]  = []
+        self._target_neighbours: set[str]         = set()
+        self._frontier: dict[str, int]           = {}  # title → distance from target (1 or 2)
+        self.target_embedding:   Optional[np.ndarray] = None
+        self._target_cosine:     dict[str, float]      = {}  # raw cosine-to-target, used by prune floor
+
+
+    async def send(self, event: str, data: dict):
+        try:
+            await self.ws.send_text(json.dumps({"event": event, **data}))
+        except Exception:
+            pass
+
+    def reconstruct_path(self, current: str) -> list[str]:
+        path = [current]
+        while current in self.came_from and self.came_from[current] is not None:
+            current = self.came_from[current]
+            path.append(current)
+        return list(reversed(path))
+
+    # ── CORE SCORING PIPELINE ─────────────────────────────────────────────────
+    async def _rank_candidates(self, candidates: list[str]) -> dict[str, float]:
+        """
+        score(candidate) =
+              cosine(candidate_emb, target_emb)              # primary signal
+            + 0.30 if candidate backlinks the target directly else 0
+            + 0.10 if candidate is one hop further out (depth-2) else 0
+            + 0.10 * max(cosine(candidate_emb, category_emb_i))
+
+        Raw target cosine is stashed in self._target_cosine for the prune
+        floor — bonuses should not be able to rescue a semantically
+        unrelated candidate, only break ties among related ones.
+        """
+        if not candidates:
+            return {}
+
+        need_embed = [t for t in candidates if t not in _emb_cache]
+        if need_embed:
+            await batch_embed(need_embed, self.stats)
+
+        combined: dict[str, float] = {}
+        for t in candidates:
+            emb = _emb_cache.get(t)
+            s_target = cosine_similarity(emb, self.target_embedding)
+            self._target_cosine[t] = s_target
+
+            fd = self._frontier.get(t)
+            frontier_bonus = FRONTIER_D1_BONUS if fd == 1 else FRONTIER_D2_BONUS if fd == 2 else 0.0
+
+            cat_bonus = 0.0
+            if self.cat_embeddings and emb is not None and emb.size:
+                cat_sim = max(cosine_similarity(emb, ce) for ce in self.cat_embeddings)
+                cat_bonus = cat_sim * CAT_BONUS_WEIGHT
+
+            combined[t] = min(0.99, s_target + frontier_bonus + cat_bonus)
+
+        return combined
+
+    async def _prune(self, pool: list[str],
+                     scores: dict[str, float]) -> tuple[list[str], int]:
+        """
+        Sort by combined score, keep the top PRUNE_TOP_K, then drop any of
+        those below the raw-cosine floor (frontier members exempt — being
+        one or two links from the target is itself strong evidence).
+        """
+        if not scores:
+            return pool, 0
+
+        ranked = sorted(pool, key=lambda t: -scores.get(t, 0.0))
+        top    = ranked[:PRUNE_TOP_K]
+
+        survivors: list[str] = []
+        for t in top:
+            raw = self._target_cosine.get(t, 0.0)
+            if t in self._frontier or raw >= PRUNE_FLOOR:
+                survivors.append(t)
+            else:
+                self.h_cache[t] = 0.95
+
+        pruned = len(pool) - len(survivors)
+        self.stats.nodes_pruned += pruned
+        print(f"[Prune] {pruned}/{len(pool)} pruned, {len(survivors)} kept")
+        return survivors, pruned
+
+    # ── RUN ───────────────────────────────────────────────────────────────────
+    async def run(self):
+        reset_session_caches()
+
+        async with make_wiki_client() as client:
+
+            # ── 1. Resolve titles ─────────────────────────────────────────
+            await self.send("status", {"message": f"Resolving '{self.start}'..."})
+            start_title = await resolve_article_title(client, self.start)
+            if not start_title:
+                await self.send("error", {"message": f"Cannot find: '{self.start}'"}); return
+
+            await self.send("status", {"message": f"Resolving '{self.end}'..."})
+            end_title = await resolve_article_title(client, self.end)
+            if not end_title:
+                await self.send("error", {"message": f"Cannot find: '{self.end}'"}); return
+
+            await self.send("resolved", {"start": start_title, "end": end_title})
+            self.end = end_title
+
+            # ── 2. Target embedding  ──────────────────────────────────────
+            await self.send("status", {"message": "Embedding target article..."})
+            te = await batch_embed([end_title], self.stats)
+            if te and te[0] is not None and te[0].size:
+                self.target_embedding = te[0]
+                _emb_cache[end_title] = te[0]
+                print(f"[Embed] Target dim={te[0].shape[0]}")
+
+            # ── 3. Target categories + their embeddings ───────────────────
+            await self.send("status", {"message": "Fetching target article categories..."})
+            self.cats_target = await get_target_categories(client, end_title)
+            print(f"[init] Target categories: {self.cats_target[:6]}")
+            if self.cats_target:
+                cat_embs = await batch_embed(self.cats_target, self.stats)
+                self.cat_embeddings = [e for e in cat_embs if e is not None and e.size]
+
+            # ── 4. Pre-seed: target frontier depth-1 ───────────────────────
+            # Backlinks (who links TO the target), not outbound links — see
+            # get_backlinks() docstring for why this direction matters.
+            await self.send("status", {"message": "Pre-loading target backlinks..."})
+            target_nb = await get_backlinks(client, end_title)
+            self._target_neighbours = set(target_nb)
+            for tn in self._target_neighbours:
+                self._frontier[tn] = 1
+            print(f"[init] Target has {len(self._target_neighbours)} backlinks")
+
+            # ── 4b. Bidirectional-style frontier: depth-2 expansion ────────
+            # For a sample of depth-1 bridges, fetch THEIR backlinks too:
+            # X -> A -> target, where A is a depth-1 bridge. Reaching X
+            # guarantees a path through A to the target.
+            await self.send("status", {"message": "Expanding target frontier (depth 2)..."})
+            d2_sample = [t for t in target_nb if not _is_date(t)][:FRONTIER_DEPTH_2_K]
+            d2_results = await asyncio.gather(
+                *[get_backlinks(client, nb_title) for nb_title in d2_sample]
+            )
+            d2_count = 0
+            for nb_links in d2_results:
+                for t in nb_links:
+                    if t not in self._frontier and not _is_date(t):
+                        self._frontier[t] = 2
+                        d2_count += 1
+            print(f"[Frontier] Total: {len(self._frontier)} "
+                  f"(depth-1: {len(self._target_neighbours)}, depth-2: {d2_count})")
+
+            # ── 5. Init search ────────────────────────────────────────────
+            self.g_score[start_title] = 0
+            se = await batch_embed([start_title], self.stats)
+            if se and se[0] is not None and se[0].size and self.target_embedding is not None:
+                h0 = max(0.01, 1.0 - cosine_similarity(se[0], self.target_embedding))
+            else:
+                h0 = 0.9
+            self.h_cache[start_title] = h0
+            heapq.heappush(self.open_heap, (h0, 0, start_title))
+            self.open_set.add(start_title)
+
+            summary = await get_article_summary(client, start_title)
+            await self.send("node_add", {
+                "id": start_title, "g": 0, "h": round(h0,3), "f": round(h0,3),
+                "summary": summary, "state": "open",
+                "is_start": True, "is_end": False,
+            })
+            await self.send("node_add", {
+                "id": end_title, "g": None, "h": 0.0, "f": None,
+                "summary": "", "state": "target",
+                "is_start": False, "is_end": True,
+            })
+
+            step = 0
+
+            # ── 6. Greedy best-first search loop ─────────────────────────
+            while self.open_heap and step < MAX_HOPS * 30:
+
+                while self._paused:
+                    await asyncio.sleep(0.3)
+
+                if not self.open_heap:
+                    break
+                h_curr, g_curr, current = heapq.heappop(self.open_heap)
+                f_curr = g_curr + h_curr  # for display only
+                self.open_set.discard(current)
+
+                if current in self.closed_set:
+                    continue
+
+                step += 1
+                self.stats.nodes_visited += 1
+
+                await self.send("expand_node", {
+                    "id":          current,
+                    "g":           g_curr,
+                    "h":           round(h_curr, 3),
+                    "f":           round(f_curr, 3),
+                    "path_so_far": self.reconstruct_path(current),
+                    "step":        step,
+                    "stats":       self.stats.to_dict(),
+                })
+
+                # Goal check
+                if current.lower() == end_title.lower():
+                    path = self.reconstruct_path(current)
+                    await self.send("found", {
+                        "path": path, "steps": step,
+                        "total_hops": len(path)-1,
+                        "stats": self.stats.to_dict(),
+                    })
+                    return
+
+                self.closed_set.add(current)
+                await self.send("node_state", {"id": current, "state": "closed"})
+
+                # ── Fetch ALL links ───────────────────────────────────────
+                await self.send("status", {"message": f"Fetching links: '{current}'..."})
+                neighbours = await get_all_links(
+                    client, current,
+                    end_title=end_title,
+                    target_neighbours=self._target_neighbours,
+                )
+                print(f"[Search] step {step}: '{current}' → {len(neighbours)} links")
+
+                if not neighbours:
+                    _dead_ends.add(current)
+                    continue
+
+                # Immediate win
+                if end_title in neighbours:
+                    self.came_from[end_title] = current
+                    self.g_score[end_title]   = g_curr + 1
+                    path = self.reconstruct_path(end_title)
+                    print(f"[Search] Direct hit: '{current}' → '{end_title}'")
+                    await self.send("found", {
+                        "path": path, "steps": step,
+                        "total_hops": len(path)-1,
+                        "stats": self.stats.to_dict(),
+                    })
+                    return
+
+                # Filter closed + dead-ends
+                candidates = [
+                    nb for nb in neighbours
+                    if nb not in self.closed_set and nb not in _dead_ends
+                ]
+
+                # ── Embed + score pipeline ────────────────────────────────
+                await self.send("status", {"message": f"Ranking links for '{current}'..."})
+                scores = await self._rank_candidates(candidates)
+
+                # ── Prune ─────────────────────────────────────────────────
+                pool = list(scores.keys())
+                survivors, _ = await self._prune(pool, scores)
+
+                # ── Push to heap ──────────────────────────────────────────
+                new_nodes = []
+                for nb in survivors:
+                    if nb in self.closed_set:
+                        continue
+                    sc      = scores.get(nb, 0.05)
+                    h_nb    = max(0.01, 1.0 - sc)
+                    self.h_cache[nb] = h_nb
+                    tent_g  = g_curr + 1
+                    if tent_g < self.g_score[nb]:
+                        self.came_from[nb] = current
+                        self.g_score[nb]   = tent_g
+                        # Greedy best-first: heap priority = h only (not g+h).
+                        # This commits to the most promising direction without
+                        # penalising depth — Wikipedia paths are short (3-7
+                        # hops) and depth is not a useful cost signal here.
+                        heapq.heappush(self.open_heap, (h_nb, tent_g, nb))
+                        self.open_set.add(nb)
+                        is_end = nb.lower() == end_title.lower()
+                        new_nodes.append({
+                            "id": nb, "g": tent_g,
+                            "h": round(h_nb, 3), "f": round(tent_g + h_nb, 3),
+                            "state": "target" if is_end else "open",
+                            "is_end": is_end, "parent": current,
+                        })
+
+                display_nodes = new_nodes[:TOP_DISPLAY]
+                display_edges = [{"from": current, "to": n["id"]} for n in display_nodes]
+                if display_nodes:
+                    await self.send("neighbours", {
+                        "centre": current,
+                        "nodes":  display_nodes,
+                        "edges":  display_edges,
+                    })
+                    await asyncio.sleep(0.01)
+
+            await self.send("not_found", {
+                "message": f"No path found within {MAX_HOPS} hops.",
+                "visited": list(self.closed_set),
+                "stats":   self.stats.to_dict(),
+            })
+
+
+# ══════════════════════════════════════════════════════════════
+# REST endpoints (autocomplete lives entirely on the frontend now —
+# it calls Wikipedia's opensearch API directly)
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/random")
+async def api_random():
+    """
+    Powers the "Random" button on the start screen. Picks two distinct
+    topics from the curated seed list (common_wiki_searches.txt) — NOT a
+    fully random Wikipedia page — so the search always gets a
+    well-connected pair of articles to find a path between.
+    """
+    titles = _load_seed_titles()
+    if len(titles) < 2:
+        return {"start": "Google", "end": "Mohali"}
+    start, end = random.sample(titles, 2)
+    return {"start": start, "end": end}
+
+
+@app.get("/api/health")
+async def api_health():
+    """
+    Polled by the frontend's loading screen on first load. Since FastAPI
+    does not accept connections until the startup handler (which loads the
+    embedding model) finishes, a successful response here already implies
+    the model is ready — there is nothing further to check.
+    """
+    return {"status": "ready"}
+
+
+# ══════════════════════════════════════════════════════════════
+# WebSocket endpoint
+# ══════════════════════════════════════════════════════════════
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    navigator: Optional[AStarNavigator] = None
+    try:
+        raw  = await ws.receive_text()
+        data = json.loads(raw)
+        if "control" in data:
+            return
+
+        start = data.get("start", "").strip()
+        end   = data.get("end",   "").strip()
+        print(f"\n{'='*60}\n[WS] '{start}' → '{end}'\n{'='*60}")
+        if not start or not end:
+            await ws.send_text(json.dumps({"event":"error","message":"Need start and end."}))
+            return
+
+        navigator = AStarNavigator(start, end, ws)
+
+        async def listen_controls():
+            while True:
+                try:
+                    msg  = await asyncio.wait_for(ws.receive_text(), timeout=0.5)
+                    ctrl = json.loads(msg)
+                    if navigator:
+                        if ctrl.get("control") == "pause":
+                            navigator._paused = True;  print("[WS] Paused")
+                        elif ctrl.get("control") == "resume":
+                            navigator._paused = False; print("[WS] Resumed")
+                except asyncio.TimeoutError:
+                    pass
+                except Exception:
+                    break
+
+        ctrl_task   = asyncio.create_task(listen_controls())
+        search_task = asyncio.create_task(navigator.run())
+        done, pending = await asyncio.wait(
+            [ctrl_task, search_task], return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+
+    except WebSocketDisconnect:
+        print("[WS] disconnected")
+    except Exception as e:
+        print(f"[WS] {e}")
+        try:
+            await ws.send_text(json.dumps({"event":"error","message":str(e)}))
+        except Exception:
+            pass
+
+
+if __name__ == "__main__":
+    import uvicorn
+    print("\n🌐 Aurelius backend → http://localhost:8000")
+    print("   Open index.html in your browser\n")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
