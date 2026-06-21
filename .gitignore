@@ -1,5 +1,21 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+venv/
+.venv/
+env/
+*.egg-info/
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
 *.bak
 .claude/
 .env

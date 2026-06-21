@@ -162,21 +162,13 @@ function extractTitleFromWikiUrl(input) {
 // original bodies, see the dedicated NOTE comments near those functions).
 // ════════════════════════════════════════════════════════════════════════════
 
-// Single source of truth for the backend origin. Derived from whatever host
-// the page itself was loaded from (not hardcoded to 'localhost') so this
-// works unmodified whether you open it as localhost, as a LAN IP from
-// another device on the same network (backend already binds 0.0.0.0 — see
-// main.py), or any other dev hostname — as long as the backend listens on
-// the same host, just port 8000. After deploying to separate frontend/
-// backend hosts (e.g. Render), replace this line with the fixed backend URL
-// (e.g. 'https://aurelius-backend.onrender.com') — the WebSocket URL below
-// is derived from it automatically (http→ws, https→wss), so nothing else in
-// this file needs to change.
-// window.location.hostname is '' when the page is opened as a local file
-// (file://index.html, which is how this app is normally launched per
-// CLAUDE.md) rather than served over http(s) — fall back to 'localhost' for
-// that case so AC_BACKEND never becomes the invalid 'http://:8000'.
-const AC_BACKEND = `http://${window.location.hostname || 'localhost'}:8000`;
+// Single source of truth for the backend origin. Frontend (Vercel) and
+// backend (Render) are deployed on separate domains, so this must be a
+// fixed URL — the dynamic window.location.hostname trick used in local/LAN
+// dev only works when frontend and backend share a host. The WebSocket URL
+// below is derived from it automatically (http→ws, https→wss), so nothing
+// else in this file needs to change if the backend URL changes.
+const AC_BACKEND = 'https://aurelius-9ly2.onrender.com';
 const AC_BACKEND_WS = AC_BACKEND.replace(/^http/, 'ws');
 const WIKI_OPENSEARCH = 'https://en.wikipedia.org/w/api.php';
 
