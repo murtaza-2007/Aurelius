@@ -1,0 +1,26 @@
+# Keep the build context (and the image) small.
+.git/
+.claude/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Frontend — served separately on Vercel, not by this backend.
+index.html
+styles.css
+app.js
+
+# Manual snapshots / backups — not used by the app.
+*.bak
+*.txt.bak
+mainpybackup.txt
+htmlbackup.txt
+main.py.bak
+index.html.bak
+
+# Docs / license — not needed at runtime.
+LICENSE
+CLAUDE.md
