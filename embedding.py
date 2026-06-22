@@ -52,6 +52,12 @@ async def load_model():
     rather than degrading silently.
     """
     global _EMBED_MODEL
+    # Render's free tier is a single throttled vCPU — torch's default thread
+    # pool spawns one thread per logical core it *thinks* it has, each
+    # holding its own memory arena. Capping to 1 avoids wasting RAM on
+    # threads that have no extra cores to actually run on anyway.
+    import torch
+    torch.set_num_threads(1)
     print(f"[Embed] Loading sentence-transformers model '{EMBED_MODEL_NAME}'...")
     t0 = time.time()
     _EMBED_MODEL = SentenceTransformer(EMBED_MODEL_NAME, device=EMBED_DEVICE)
