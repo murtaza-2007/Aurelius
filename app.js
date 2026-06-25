@@ -219,6 +219,23 @@ function triggerAutocomplete(fieldName) {
   }, AC_DEBOUNCE_MS);
 }
 
+/**
+ * Escape a string for safe interpolation into innerHTML. Article titles come
+ * from the Wikipedia API and can't currently contain "<"/">" (MediaWiki
+ * forbids them in titles), but they CAN contain "&", quotes, and arbitrary
+ * Unicode — and the backend data source could change. Routing every
+ * untrusted string through here makes the innerHTML sinks below safe by
+ * construction rather than by assumption.
+ */
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Render the top-5 suggestions below the given hero field. */
 function renderAcDropdown(fieldName) {
   const dropdown = document.getElementById('ac-dropdown-' + fieldName);
@@ -231,8 +248,8 @@ function renderAcDropdown(fieldName) {
 
   dropdown.innerHTML = items.map((title, i) => `
     <div class="ac-item${i === acActiveIndex[fieldName] ? ' ac-active' : ''}"
-         data-idx="${i}" data-title="${title.replace(/"/g, '&quot;')}">
-      <svg class="ac-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M4 2h6l3 3v9H4V2z"/><path d="M10 2v3h3"/><line x1="6" y1="7" x2="11" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg>${title}
+         data-idx="${i}" data-title="${escHtml(title)}">
+      <svg class="ac-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M4 2h6l3 3v9H4V2z"/><path d="M10 2v3h3"/><line x1="6" y1="7" x2="11" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg>${escHtml(title)}
     </div>
   `).join('');
   dropdown.classList.add('visible');
@@ -804,7 +821,7 @@ function updateScores(nodeData) {
     const card = document.createElement('div');
     card.className = 'score-card';
     card.innerHTML = `
-      <div class="title">${n.id}</div>
+      <div class="title">${escHtml(n.id)}</div>
       <div class="score-row"><span>f(n)</span><span>${n.f}</span></div>
       <div class="score-row"><span>g(n)</span><span>${n.g ?? '—'}</span></div>
       <div class="score-row"><span>h(n)</span><span>${n.h ?? '—'}</span></div>
@@ -1152,7 +1169,7 @@ function openSuccessModal(path, steps, hops, displayTexts) {
     btn.href = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(p.replace(/ /g, '_'));
     btn.target = '_blank';
     btn.innerHTML = `
-      <span>${p}</span>
+      <span>${escHtml(p)}</span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px;opacity:0.7">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
         <polyline points="15 3 21 3 21 9"></polyline>
