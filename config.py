@@ -31,7 +31,7 @@ WIKI_HEADERS = {
 }
 
 # ── Search ───────────────────────────────────────────────────────────────
-MAX_HOPS            = 60    # enforced as expansion-count cap, not path-length cap (see search.py)
+MAX_HOPS            = 100    # enforced as expansion-count cap, not path-length cap (see search.py)
 TOP_DISPLAY         = 25    # max neighbours sent to frontend per step
 
 # ── Scoring ──────────────────────────────────────────────────────────────
