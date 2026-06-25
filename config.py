@@ -89,6 +89,31 @@ STAGNATION_DELTA        = 0.02  # min improvement over window to count as progre
 PRUNE_TOP_K_STAGNANT    = 25    # widened beam when stagnant (vs 15 normal)
 DIVERSITY_WEIGHT        = 0.10  # weight for centroid-distance diversity bonus
 
+# ── Security / abuse limits ──────────────────────────────────────────────
+# This backend is public and unauthenticated. None of the limits below
+# change search behaviour for a normal user — they only bound what a single
+# abusive client can make the server do (open WS handshakes, CPU-bound
+# embedding, and Wikipedia API traffic on the shared free tier).
+#
+# ALLOWED_ORIGINS: browser Origins permitted to call the API (CORS for the
+# REST endpoints + an explicit Origin check on the WebSocket handshake).
+# Defaults cover the deployed Vercel frontend, localhost dev, and the
+# "null" origin used when index.html is opened directly via file:// (the
+# documented local workflow). Override in production with the env var, e.g.
+# ALLOWED_ORIGINS="https://aurelius-psi.vercel.app". Non-browser clients
+# (curl, scripts) send no Origin and are unaffected — Origin checks only
+# defend against other websites' JS driving this backend from a user's browser.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv(
+        "ALLOWED_ORIGINS",
+        "https://aurelius-psi.vercel.app,"
+        "http://localhost:8000,http://127.0.0.1:8000,null",
+    ).split(",") if o.strip()
+]
+MAX_QUERY_LEN           = int(os.getenv("AURELIUS_MAX_QUERY_LEN", "200"))   # reject absurd start/end strings
+MAX_CONCURRENT_SEARCHES = int(os.getenv("AURELIUS_MAX_CONCURRENT", "4"))    # parallel searches the box will run
+MAX_SEARCH_SECONDS      = int(os.getenv("AURELIUS_MAX_SEARCH_SECONDS", "300"))  # hard wall-clock cap per connection
+
 # ── Files ────────────────────────────────────────────────────────────────
 _THIS_DIR           = Path(__file__).resolve().parent
 SEED_FILE           = _THIS_DIR / "common_wiki_searches.txt"
