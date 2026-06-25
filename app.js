@@ -163,12 +163,12 @@ function extractTitleFromWikiUrl(input) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Single source of truth for the backend origin. Frontend (Vercel) and
-// backend (Render) are deployed on separate domains, so this must be a
-// fixed URL — the dynamic window.location.hostname trick used in local/LAN
-// dev only works when frontend and backend share a host. The WebSocket URL
-// below is derived from it automatically (http→ws, https→wss), so nothing
-// else in this file needs to change if the backend URL changes.
-const AC_BACKEND = 'https://aurelius-9ly2.onrender.com';
+// backend (Hugging Face Spaces) are deployed on separate domains, so this
+// must be a fixed URL — the dynamic window.location.hostname trick used in
+// local/LAN dev only works when frontend and backend share a host. The
+// WebSocket URL below is derived from it automatically (http→ws, https→wss),
+// so nothing else in this file needs to change if the backend URL changes.
+const AC_BACKEND = 'https://mvali77-aurelius.hf.space';
 const AC_BACKEND_WS = AC_BACKEND.replace(/^http/, 'ws');
 const WIKI_OPENSEARCH = 'https://en.wikipedia.org/w/api.php';
 
