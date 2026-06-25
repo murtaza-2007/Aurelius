@@ -22,7 +22,7 @@
   <div id="loading-screen">
     <div id="loading-logo">Aurelius</div>
     <div id="loading-spinner"></div>
-    <div id="loading-hint">Just a bit longer — the algorithm is waking up.</div>
+    <div id="loading-hint">Just a bit longer; the algorithm is waking up.</div>
   </div>
 
   <!-- ═══════════════════ HERO LANDING ═══════════════════ -->
@@ -223,10 +223,10 @@
             <div class="legend-dot" style="background:var(--amber)"></div>Current centre (being expanded)
           </div>
           <div class="legend-row">
-            <div class="legend-dot" style="background:var(--accent)"></div>Open — in A* queue
+            <div class="legend-dot" style="background:var(--accent)"></div>Open, in A* queue
           </div>
           <div class="legend-row">
-            <div class="legend-dot" style="background:#374151;border:1px solid #555"></div>Closed — already explored
+            <div class="legend-dot" style="background:#374151;border:1px solid #555"></div>Closed, already explored
           </div>
           <div class="legend-row">
             <div class="legend-dot" style="background:var(--green)"></div>Target article
@@ -279,7 +279,7 @@
       <div id="modal-path-container" class="modal-path"></div>
       <p class="modal-disclaimer">
         Every link above is real, but the wording shown on a page isn't always
-        the link's title — e.g. a page may display "iterative" while the link
+        the link's title; for example, a page may display "iterative" while the link
         actually points to "Iteration", or show "AI" linking to
         "Artificial intelligence". Wikipedia links can be piped like that, so
         the visible text and the article it leads to can differ.
@@ -342,17 +342,17 @@
       <div class="about-quote-block">
         <span class="about-quote-mark">"</span>
         <p class="about-quote-text">The universe is change, our life is what our thoughts make it.</p>
-        <p class="about-quote-attr">Marcus Aurelius — Meditations</p>
+        <p class="about-quote-attr">Marcus Aurelius, Meditations</p>
       </div>
 
       <p class="about-prose">Named after the Stoic emperor who wrote that every idea connects to the next. Wikipedia is
-        proof of that — millions of articles linked by shared meaning. Aurelius makes those connections visible by
+        proof of that; millions of articles linked by shared meaning. Aurelius makes those connections visible by
         finding the path between any two articles, however unrelated they seem.</p>
 
       <hr class="about-divider" />
       <span class="about-section-label">How it works</span>
       <p style="font-size:11px;color:var(--text2);opacity:0.6;font-style:italic;margin:-8px 0 16px;">
-        Works best on desktop — the live graph and side panel are easiest to read on a larger screen.
+        Works best on desktop; the live graph and side panel are easiest to read on a larger screen.
       </p>
       <div class="about-tech-grid">
         <div class="about-tech-card">
@@ -365,11 +365,11 @@
             <path d="M18 7.8 L24 18.2" />
             <circle cx="16" cy="16" r="1.8" fill="currentColor" stroke="none" />
           </svg>
-          <div class="tech-name">A8 Search</div>
-          <div class="tech-desc">Built for meaning, not distance. Each candidate's priority blends three signals:
-            semantic closeness, a <em>verified</em> backlink bridge to the destination, and category alignment into a
-            single score. There is no depth penalty. A8 commits fully to whichever lead looks strongest at that moment
-            instead of spreading thin.</div>
+          <div class="tech-name">Best-First Search</div>
+          <div class="tech-desc">Instead of checking links at random, Aurelius always opens the article that
+            <em>looks closest</em> to the goal next, like always taking the turn that points toward where
+            you're headed. It's the same idea behind A*: chase the most promising lead first rather than
+            exploring everything.</div>
         </div>
         <div class="about-tech-card">
           <svg class="tech-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -385,9 +385,10 @@
             <line x1="15.4" y1="17.8" x2="20" y2="14.2" />
           </svg>
           <div class="tech-name">Semantic Embeddings</div>
-          <div class="tech-desc">Titles become high-dimensional vectors, computed instantly on-device. Cosine similarity
-            tells the search how close any candidate is to the target, not through keywords, but through
-            <em>meaning</em>.
+          <div class="tech-desc">Each article is turned into a string of numbers that captures its
+            <em>meaning</em>. Related topics get similar numbers, so "Jazz" sits near "Saxophone" but far
+            from "Java". Comparing those numbers is how the search tells whether a link actually gets it
+            closer.
           </div>
         </div>
         <div class="about-tech-card">
@@ -399,9 +400,10 @@
             <path d="M10.5 12.5 L13.8 16 L10.5 19.5" />
             <path d="M23 16 H18.2" />
           </svg>
-          <div class="tech-name">Bidirectional Target Frontier</div>
-          <div class="tech-desc">Before searching, Aurelius maps every article one and two links away from the target.
-            Candidates inside that zone receive a strong score boost. The search aims at a wide net, not a single point.
+          <div class="tech-name">Search From Both Ends</div>
+          <div class="tech-desc">Aurelius also gathers every article that links <em>to</em> your destination
+            ahead of time. When the forward search runs into one of them, the two sides meet in the middle,
+            reaching the answer far quicker than searching from the start alone.
           </div>
         </div>
         <div class="about-tech-card">
@@ -414,31 +416,35 @@
             <path d="M5 16 H8" />
             <path d="M24 16 H27" />
           </svg>
-          <div class="tech-name">Stagnation Escape</div>
-          <div class="tech-desc">If the search stalls in a dense off-topic cluster, Aurelius detects the plateau,
-            widens the beam, and adds a <em>diversity bonus</em> to candidates far from the cluster centroid.
-            No fabricated edges, just smarter pruning to break free.</div>
+          <div class="tech-name">Breaking Out of Dead Ends</div>
+          <div class="tech-desc">If the search keeps circling a cluster of similar-but-wrong pages, it notices
+            it has stopped making progress, casts a wider net, and favors more <em>varied</em> links to escape,
+            and it never invents a link that doesn't truly exist.</div>
         </div>
       </div>
 
       <hr class="about-divider" />
       <span class="about-section-label">What makes it different</span>
       <div class="about-compare">
-        <div class="about-compare-head">Traditional Wiki Solver</div>
+        <div class="about-compare-head">Basic Wiki Solver</div>
         <div class="about-compare-head accent">Aurelius</div>
 
-        <div class="about-compare-cell">Blind to meaning. "Film" and "Film noir" count the same</div>
-        <div class="about-compare-cell accent">Ranks every candidate by semantic similarity</div>
+        <div class="about-compare-cell">Treats every link as equal</div>
+        <div class="about-compare-cell accent">Ranks every link by meaning</div>
 
-        <div class="about-compare-cell">Treats every link as equally promising</div>
-        <div class="about-compare-cell accent">Boosts verified backlink bridges and goal-zone members</div>
-
-        <div class="about-compare-cell">Expands breadth-first until both frontiers meet</div>
-        <div class="about-compare-cell accent">Commits fully to the strongest lead, with no wasted breadth</div>
-
-        <div class="about-compare-cell">No model of meaning at all, just raw links</div>
-        <div class="about-compare-cell accent">Embeddings + graph search, zero language models</div>
+        <div class="about-compare-cell">Searches blindly until it stumbles on the target</div>
+        <div class="about-compare-cell accent">Aims at the goal from both ends</div>
       </div>
+
+      <hr class="about-divider" />
+      <span class="about-section-label">Where this is going</span>
+      <p class="about-demo-note">
+        Right now Aurelius is a <strong>demo</strong>; it runs on Wikipedia because it's a huge, familiar
+        graph that's genuinely fun to watch the search crawl through. But the engine underneath isn't tied to
+        Wikipedia: the same idea of <em>finding the meaningful path through a giant network</em> could one day
+        power research-paper discovery, internal knowledge bases, and more. Consider this step one toward a
+        general, deployable tool.
+      </p>
 
       <hr class="about-divider" />
       <span class="about-section-label">Built by</span>
@@ -487,7 +493,7 @@
         </div>
       </div>
       <p class="onboarding-tip">
-        Tip: try two completely random, unrelated things — that's usually where the most surprising connections show up.
+        Tip: try two completely random, unrelated things; that's usually where the most surprising connections show up.
       </p>
       <button class="modal-close-btn onboarding-go-btn" onclick="closeOnboarding()">Let's Go</button>
     </div>

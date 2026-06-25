@@ -483,7 +483,7 @@ function startSearch() {
     // has been handled, so bail out — there's nothing wrong to report.
     if (!running) return;
     setStatus('⚠️  Cannot connect to backend. Is main.py running?');
-    addLog('WebSocket error — is the backend running? (python main.py)', 'error');
+    addLog('WebSocket error; is the backend running? (python main.py)', 'error');
     document.getElementById('btn-search').disabled = false;
     running = false;
   };
@@ -1074,7 +1074,7 @@ function _hidePauseBtn() {
 function exportPath() {
   if (!foundPath.length) return;
   const lines = [
-    'Aurelius — Path Export',
+    'Aurelius - Path Export',
     '='.repeat(50),
     '',
     `Path (${foundPath.length - 1} hops):`,
