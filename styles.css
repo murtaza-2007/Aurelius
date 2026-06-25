@@ -451,9 +451,9 @@ body::before {
   position: absolute;
   top: 20px;
   right: 20px;
-  background: transparent;
-  color: var(--text2);
-  border: 1px solid var(--border);
+  background: rgba(201, 138, 46, .07);
+  color: var(--text);
+  border: 1px solid rgba(201, 138, 46, .32);
   border-radius: 5px;
   padding: 7px 16px;
   font-size: 12px;
@@ -463,24 +463,30 @@ body::before {
   font-family: 'Outfit', sans-serif;
   z-index: 10;
   letter-spacing: 0.4px;
-  animation: about-pulse 3.5s ease-in-out infinite;
+  box-shadow: 0 0 14px rgba(201, 138, 46, .12);
+  animation: about-pulse 3s ease-in-out infinite;
 }
 
 #hero-about-btn:hover {
-  color: var(--text);
-  border-color: rgba(201, 138, 46, .3);
+  color: #fff;
+  background: rgba(201, 138, 46, .16);
+  border-color: rgba(201, 138, 46, .6);
+  box-shadow: 0 0 20px rgba(201, 138, 46, .32);
   animation: none;
 }
 
+/* Amber pulse + glow so the button reads as clickable, not a static label. */
 @keyframes about-pulse {
 
   0%,
   100% {
-    border-color: rgba(255, 243, 210, .08);
+    border-color: rgba(201, 138, 46, .28);
+    box-shadow: 0 0 12px rgba(201, 138, 46, .10);
   }
 
   50% {
-    border-color: rgba(201, 138, 46, .22);
+    border-color: rgba(201, 138, 46, .55);
+    box-shadow: 0 0 20px rgba(201, 138, 46, .28);
   }
 }
 
@@ -681,9 +687,9 @@ body::before {
 }
 
 #btn-about {
-  background: transparent;
-  color: var(--text2);
-  border: 1px solid var(--border);
+  background: rgba(201, 138, 46, .06);
+  color: var(--text);
+  border: 1px solid rgba(201, 138, 46, .28);
   border-radius: 5px;
   padding: 7px 14px;
   font-size: 12px;
@@ -692,11 +698,14 @@ body::before {
   transition: all 0.2s;
   font-family: 'Outfit', sans-serif;
   flex-shrink: 0;
+  box-shadow: 0 0 10px rgba(201, 138, 46, .08);
 }
 
 #btn-about:hover {
-  color: var(--text);
-  border-color: rgba(201, 138, 46, .25);
+  color: #fff;
+  background: rgba(201, 138, 46, .15);
+  border-color: rgba(201, 138, 46, .55);
+  box-shadow: 0 0 16px rgba(201, 138, 46, .26);
 }
 
 #status-bar {
@@ -1707,6 +1716,29 @@ svg#graph {
   margin-bottom: 14px;
 }
 
+/* "Where this is going" demo callout — amber-tinted box so the
+   forward-looking note reads as a distinct aside, not body copy. */
+.about-demo-note {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.85;
+  background: rgba(201, 138, 46, .06);
+  border: 1px solid rgba(201, 138, 46, .22);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 4px 0 2px;
+}
+
+.about-demo-note strong {
+  color: var(--accent2);
+}
+
+.about-demo-note em {
+  color: var(--text);
+  font-style: italic;
+}
+
 .about-prose b {
   color: var(--text);
 }
@@ -2104,26 +2136,53 @@ svg#graph {
     border-top: 1px solid var(--border);
   }
 
-  /* Topbar wraps instead of overflowing horizontally. The two
-     article inputs share the first row; buttons + status flow
-     onto following rows as needed. */
+  /* Mobile topbar becomes a tidy stacked search form instead of a row
+     of controls that wrap unpredictably. Explicit `order` lays it out as:
+       row 1:  [logo]  ............  [Reset] [About]
+       row 2:  FROM input (full width)
+       row 3:  ⇅ swap  (centered, between the two fields)
+       row 4:  TO input (full width)
+       row 5:  Find Path (full-width primary action)
+       row 6:  status text
+     The two .input-wrap and #btn-swap share order:4 so they fall back to
+     DOM order (start, swap, end) — each full-width field forces its own
+     line, leaving swap centered on the line between them. */
   #topbar {
     flex-wrap: wrap;
     height: auto;
     min-height: 52px;
-    padding: 8px 12px;
+    padding: 10px 12px;
     row-gap: 8px;
+    column-gap: 8px;
+    align-items: center;
   }
 
+  #topbar-logo { order: 1; margin-right: auto; }
+  #btn-reset   { order: 2; }
+  #btn-about   { order: 3; }
+
   .input-wrap {
-    flex: 1 1 140px;
+    order: 4;
+    flex: 1 1 100%;
     min-width: 0;
     max-width: none;
   }
 
+  #btn-swap {
+    order: 4;
+    margin: 0 auto;
+    align-self: center;
+  }
+
+  #btn-search {
+    order: 5;
+    flex: 1 1 100%;
+    padding: 11px 18px;
+  }
+
   #status-bar {
     flex: 1 1 100%;
-    order: 10;
+    order: 6;
     white-space: normal;
   }
 }
@@ -2190,7 +2249,7 @@ svg#graph {
      directly) — generous enough to fit the wrapped multi-row mobile
      topbar without clipping while expanded. */
   #topbar {
-    max-height: 300px;
+    max-height: 380px;
     overflow: hidden;
     transition: max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
       opacity 0.25s ease, padding 0.32s ease;
@@ -2278,10 +2337,10 @@ svg#graph {
   }
 
   #hero-about-btn {
-    top: 12px;
-    right: 12px;
-    padding: 6px 13px;
-    font-size: 11px;
+    top: 14px;
+    right: 14px;
+    padding: 9px 18px;
+    font-size: 13px;
   }
 
   #hero-btn {
